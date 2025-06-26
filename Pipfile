@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 lark = "*"
+pytest = "*"
 
 [dev-packages]
 
