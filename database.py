@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from functools import reduce
 from typing import Any
 
-from query_parser import parse
+from query import parse
 
 
 @dataclass
