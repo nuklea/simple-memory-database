@@ -1,17 +1,30 @@
 #!/usr/bin/env python3
 import sys
 
-from database import Database
+import lark
+
+from database import Database, SoftError
 
 database = Database()
-database.execute('SET A 10')
-database.execute('SET A 11')
-print(database.execute('GET A'))
 
 try:
     while True:
         sys.stdout.write('> ')
         command = input()
-        print(database.execute(command))
+
+        try:
+            result = database.execute(command)
+            match result:
+                case None:
+                    pass
+                case PrintableResult:
+                    if result.message is None:
+                        print('NULL')
+                    else:
+                        print(result.message)
+        except SoftError as e:
+            print(e.message)
+        except lark.exceptions.UnexpectedToken as e:
+            print(str(e))
 except EOFError:
     print('Bye-bye!')

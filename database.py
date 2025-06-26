@@ -1,7 +1,19 @@
 from collections import Counter
+from dataclasses import dataclass
 from functools import reduce
+from typing import Any
 
 from command_parser import parse
+
+
+@dataclass
+class PrintableResult:
+    message: Any
+
+
+@dataclass
+class SoftError(Exception):
+    message: str
 
 
 class Database:
@@ -38,11 +50,11 @@ class Database:
             if key in self.commited_state:
                 del self.commited_state[key]
             else:
-                return 'Var {} not found'.format(key)
+                raise SoftError('Var {} not found'.format(key))
 
     def _cmd_counts(self, value):
         counter = Counter(self._get_state().values())
-        return counter.get(value) or 0
+        return PrintableResult(counter.get(value) or 0)
 
     def execute(self, text_command):
         command_tree = parse(text_command)
@@ -56,7 +68,7 @@ class Database:
 
             case 'GET':
                 key = command[1]
-                return self._get_state().get(key)
+                return PrintableResult(self._get_state().get(key))
 
             case 'UNSET':
                 key = command[1]
@@ -68,7 +80,7 @@ class Database:
 
             case 'FIND':
                 value = command[1]
-                return ' '.join(k for k, v in self._get_state().items() if v == value)
+                return PrintableResult(' '.join(k for k, v in self._get_state().items() if v == value))
 
             case 'END':
                 raise EOFError
@@ -77,6 +89,9 @@ class Database:
                 self.transaction_level += 1
 
             case 'ROLLBACK':
+                if not self.in_transaction:
+                    raise SoftError('Not in transaction')
+
                 self.transactions.pop()
                 self.transaction_level -= 1
 
