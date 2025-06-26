@@ -29,12 +29,12 @@ class TestDatabase(TestCase):
 
         e('BEGIN')
 
-        self.assertFalse(database.transaction)
+        self.assertFalse(database.transactions)
         self.assertTrue(database.in_transaction)
 
         e('SET A 10')
 
-        self.assertTrue(database.transaction)
+        self.assertTrue(database.transactions)
 
         e('BEGIN')
         e('SET A 20')
@@ -46,7 +46,7 @@ class TestDatabase(TestCase):
         e('COMMIT')
         self.assertEqual(e('GET A'), 20)
         self.assertEqual(database.commited_state, {'A': 20})
-        self.assertFalse(database.transaction)
+        self.assertFalse(database.transactions)
         self.assertFalse(database.in_transaction)
 
     def test_find(self):

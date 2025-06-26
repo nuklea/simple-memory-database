@@ -7,7 +7,7 @@ from command_parser import parse
 class Database:
     def __init__(self):
         self.commited_state = {}
-        self.transaction: list[dict] = []
+        self.transactions: list[dict] = []
         self.transaction_level = -1
 
     @property
@@ -17,23 +17,23 @@ class Database:
     def _get_state(self) -> dict:
         """Возвращает актуальное состояние, даже если фиксация не была произведена"""
         if self.in_transaction:
-            return reduce(lambda state, trans_ops: {**state, **trans_ops}, self.transaction, self.commited_state)
+            return reduce(lambda state, trans_ops: {**state, **trans_ops}, self.transactions, self.commited_state)
         else:
             return self.commited_state
 
     def _cmd_set(self, key, value):
         if self.in_transaction:
             change = {key: value}
-            if self.transaction_level in self.transaction:
-                self.transaction[self.transaction_level].update(change)
+            if self.transaction_level in self.transactions:
+                self.transactions[self.transaction_level].update(change)
             else:
-                self.transaction.append(change)
+                self.transactions.append(change)
         else:
             self.commited_state[key] = value
 
     def _cmd_unset(self, key):
         if self.in_transaction:
-            self.transaction.append({key: None})
+            self.transactions.append({key: None})
         else:
             if key in self.commited_state:
                 del self.commited_state[key]
@@ -77,10 +77,10 @@ class Database:
                 self.transaction_level += 1
 
             case 'ROLLBACK':
-                self.transaction.pop()
+                self.transactions.pop()
                 self.transaction_level -= 1
 
             case 'COMMIT':
                 self.commited_state = self._get_state()
                 self.transaction_level = -1
-                self.transaction.clear()
+                self.transactions.clear()
