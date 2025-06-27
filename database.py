@@ -22,6 +22,36 @@ class Database:
         self.transactions: list[dict] = []
         self.transaction_level = -1
 
+    def execute(self, text_command):
+        command_tree = parse(text_command)
+        command = command_tree.children[0]
+        command_name = command[0]
+
+        match command_name:
+            case 'SET':
+                (key, value) = command[1:]
+                self._cmd_set(key, value)
+            case 'GET':
+                key = command[1]
+                return self._cmd_get(key)
+            case 'UNSET':
+                key = command[1]
+                self._cmd_unset(key)
+            case 'COUNTS':
+                value = command[1]
+                return self._cmd_counts(value)
+            case 'FIND':
+                value = command[1]
+                return self._cmd_find(value)
+            case 'END':
+                self._cmd_end()
+            case 'BEGIN':
+                self._cmd_begin()
+            case 'ROLLBACK':
+                self._cmd_rollback()
+            case 'COMMIT':
+                self._cmd_commit()
+
     @property
     def in_transaction(self):
         return self.transaction_level != -1
@@ -32,6 +62,9 @@ class Database:
             return reduce(lambda state, trans_ops: {**state, **trans_ops}, self.transactions, self.commited_state)
         else:
             return self.commited_state
+
+    def _cmd_get(self, key):
+        return PrintableResult(self._get_state().get(key))
 
     def _cmd_set(self, key, value):
         if self.in_transaction:
@@ -56,46 +89,23 @@ class Database:
         counter = Counter(self._get_state().values())
         return PrintableResult(counter.get(value) or 0)
 
-    def execute(self, text_command):
-        command_tree = parse(text_command)
-        command = command_tree.children[0]
-        command_name = command[0]
+    def _cmd_find(self, value):
+        return PrintableResult(' '.join(k for k, v in self._get_state().items() if v == value))
 
-        match command_name:
-            case 'SET':
-                (key, value) = command[1:]
-                self._cmd_set(key, value)
+    def _cmd_end(self):
+        raise EOFError
 
-            case 'GET':
-                key = command[1]
-                return PrintableResult(self._get_state().get(key))
+    def _cmd_begin(self):
+        self.transaction_level += 1
 
-            case 'UNSET':
-                key = command[1]
-                self._cmd_unset(key)
+    def _cmd_rollback(self):
+        if not self.in_transaction:
+            raise SoftError('Not in transaction')
 
-            case 'COUNTS':
-                value = command[1]
-                return self._cmd_counts(value)
+        self.transactions.pop()
+        self.transaction_level -= 1
 
-            case 'FIND':
-                value = command[1]
-                return PrintableResult(' '.join(k for k, v in self._get_state().items() if v == value))
-
-            case 'END':
-                raise EOFError
-
-            case 'BEGIN':
-                self.transaction_level += 1
-
-            case 'ROLLBACK':
-                if not self.in_transaction:
-                    raise SoftError('Not in transaction')
-
-                self.transactions.pop()
-                self.transaction_level -= 1
-
-            case 'COMMIT':
-                self.commited_state = self._get_state()
-                self.transaction_level = -1
-                self.transactions.clear()
+    def _cmd_commit(self):
+        self.commited_state = self._get_state()
+        self.transaction_level = -1
+        self.transactions.clear()
