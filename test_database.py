@@ -55,3 +55,8 @@ class TestDatabase(TestCase):
         e('SET A 10')
         e('SET B 10')
         self.assertEqual(e('FIND 10'), PrintableResult('A B'))
+
+    def test_end(self):
+        database = Database()
+        with self.assertRaises(EOFError):
+            database.execute('END')
