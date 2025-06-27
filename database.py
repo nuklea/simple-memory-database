@@ -20,7 +20,7 @@ class Database:
     def __init__(self):
         self.commited_state = {}
         self.transactions: list[dict] = []
-        self.transaction_level = -1
+        self.transaction_depth = -1
 
     def execute(self, text_command):
         command_tree = parse(text_command)
@@ -54,7 +54,7 @@ class Database:
 
     @property
     def in_transaction(self):
-        return self.transaction_level != -1
+        return self.transaction_depth != -1
 
     def _get_state(self) -> dict:
         """Возвращает актуальное состояние, даже если фиксация не была произведена"""
@@ -69,8 +69,8 @@ class Database:
     def _cmd_set(self, key, value):
         if self.in_transaction:
             change = {key: value}
-            if self.transaction_level in self.transactions:
-                self.transactions[self.transaction_level].update(change)
+            if self.transaction_depth in self.transactions:
+                self.transactions[self.transaction_depth].update(change)
             else:
                 self.transactions.append(change)
         else:
@@ -96,16 +96,16 @@ class Database:
         raise EOFError
 
     def _cmd_begin(self):
-        self.transaction_level += 1
+        self.transaction_depth += 1
 
     def _cmd_rollback(self):
         if not self.in_transaction:
             raise SoftError('Not in transaction')
 
         self.transactions.pop()
-        self.transaction_level -= 1
+        self.transaction_depth -= 1
 
     def _cmd_commit(self):
         self.commited_state = self._get_state()
-        self.transaction_level = -1
+        self.transaction_depth = -1
         self.transactions.clear()
