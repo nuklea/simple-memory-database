@@ -45,9 +45,8 @@ class TestDatabase(TestCase):
         self.assertEqual(e('GET A'), PrintableResult(20))
         e('COMMIT')
         self.assertEqual(e('GET A'), PrintableResult(20))
-        self.assertEqual(database.commited_state, {'A': 20})
-        self.assertFalse(database.transactions)
-        self.assertFalse(database.in_transaction)
+        self.assertTrue(database.transactions)
+        self.assertTrue(database.in_transaction)
 
     def test_find(self):
         database = Database()
@@ -60,3 +59,23 @@ class TestDatabase(TestCase):
         database = Database()
         with self.assertRaises(EOFError):
             database.execute('END')
+
+    def test_rollback_after_commit(self):
+        database = Database()
+        e, s = database.execute, database.commited_state
+
+        e('SET A 1')
+
+        e('BEGIN')
+        e('SET A 2')
+
+        e('BEGIN')
+        e('SET A 3')
+        e('COMMIT')
+
+        self.assertEqual(e('GET A'), PrintableResult(3))
+        e('ROLLBACK')
+        self.assertEqual(e('GET A'), PrintableResult(1))
+        self.assertFalse(database.transactions)
+        self.assertEqual(s, {'A': 1})
+

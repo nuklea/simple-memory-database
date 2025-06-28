@@ -6,20 +6,29 @@ from typing import Any
 from query import parse
 
 
-@dataclass
+@dataclass(frozen=True)
 class PrintableResult:
     message: Any
 
 
-@dataclass
+@dataclass(frozen=True)
 class SoftError(Exception):
     message: str
+
+
+NotInTransactionError = SoftError('NotInTransaction')
+
+
+@dataclass
+class Transaction:
+    change: dict
+    commited: bool = False
 
 
 class Database:
     def __init__(self):
         self.commited_state = {}
-        self.transactions: list[dict] = []
+        self.transactions: list[Transaction] = []
         self.transaction_depth = -1
 
     def execute(self, text_command):
@@ -56,10 +65,15 @@ class Database:
     def in_transaction(self):
         return self.transaction_depth != -1
 
+    @property
+    def last_uncommited_transaction_idx(self):
+        uncommited = [i for i, t in enumerate(self.transactions) if not t.commited]
+        return uncommited[-1] if uncommited else None
+
     def _get_state(self) -> dict:
         """Возвращает актуальное состояние, даже если фиксация не была произведена"""
         if self.in_transaction:
-            return reduce(lambda state, trans_ops: {**state, **trans_ops}, self.transactions, self.commited_state)
+            return reduce(lambda state, trans: {**state, **trans.change}, self.transactions, self.commited_state)
         else:
             return self.commited_state
 
@@ -70,15 +84,15 @@ class Database:
         if self.in_transaction:
             change = {key: value}
             if self.transaction_depth in self.transactions:
-                self.transactions[self.transaction_depth].update(change)
+                self.transactions[self.transaction_depth].change.update(change)
             else:
-                self.transactions.append(change)
+                self.transactions.append(Transaction(change))
         else:
             self.commited_state[key] = value
 
     def _cmd_unset(self, key):
         if self.in_transaction:
-            self.transactions.append({key: None})
+            self.transactions.append(Transaction({key: None}))
         else:
             if key in self.commited_state:
                 del self.commited_state[key]
@@ -100,12 +114,21 @@ class Database:
 
     def _cmd_rollback(self):
         if not self.in_transaction:
-            raise SoftError('Not in transaction')
+            raise NotInTransactionError
 
-        self.transactions.pop()
+        idx = self.last_uncommited_transaction_idx
+        self.transactions = self.transactions[:idx]
         self.transaction_depth -= 1
 
     def _cmd_commit(self):
-        self.commited_state = self._get_state()
-        self.transaction_depth = -1
-        self.transactions.clear()
+        if not self.in_transaction:
+            raise NotInTransactionError
+
+        idx = self.last_uncommited_transaction_idx
+        self.transactions[idx].commited = True
+
+        if all(t.commited for t in self.transactions):
+            # Если все зафиксированы, обновляем глобальное состояние
+            self.commited_state = self._get_state()
+            self.transactions.clear()
+            self.transaction_depth = -1
