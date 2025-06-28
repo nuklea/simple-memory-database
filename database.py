@@ -72,10 +72,7 @@ class Database:
 
     def _get_state(self) -> dict:
         """Возвращает актуальное состояние, даже если фиксация не была произведена"""
-        if self.in_transaction:
-            return reduce(lambda state, trans: {**state, **trans.change}, self.transactions, self.commited_state)
-        else:
-            return self.commited_state
+        return reduce(lambda state, trans: {**state, **trans.change}, self.transactions, self.commited_state)
 
     def _cmd_get(self, key):
         return PrintableResult(self._get_state().get(key))
